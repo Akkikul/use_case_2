@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation Template"
+Parameters:
+  HostBucket:
+    Type: String
+  SourceBucket:
+    Type: String
+Resources:
+  SBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref SourceBucket
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Function: !GetAtt LambdaFunction.Arn
+  BucketPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref LambdaFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub arn:aws:s3:::${SourceBucket}
+  DestBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+          BucketName: "use-case-2-31122019-destination"
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "use_case_2_function"
+      Runtime: python3.7
+      Handler: index.handler
+      Timeout: 10
+      Role:
+        Fn::GetAtt:
+          - lambdas3role
+          - Arn
+      Code:
+          S3Bucket: !Ref HostBucket
+          S3Key: 'copy_to_s3_function.zip'
+      Environment:
+        Variables:
+            SOURCE_BUCKET: !Ref SourceBucket
+            DESTINATION_BUCKET: !Ref DestBucket
+            HOST_BUCKET: !Ref HostBucket
+            KEY_NAME: 'hello.txt'
+  lambdas3role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: S3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                - s3:GetObject
+                Resource: !Sub arn:aws:s3:::${SourceBucket}/*
+              - Effect: Allow
+                Action:
+                - s3:PutObject
+                Resource: !Sub arn:aws:s3:::${DestBucket}/*
+      Description: 'Lambda Role for S3 Get and Put Access'
+      Path: /
+      RoleName: 'lambda_s3_get_put_access'
